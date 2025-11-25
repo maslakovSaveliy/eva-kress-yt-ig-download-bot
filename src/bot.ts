@@ -7,7 +7,14 @@ import { deleteFile, ensureDir } from './utils/file.js';
 
 export const bot = new Bot(config.botToken);
 
+// Логируем все входящие апдейты
+bot.use(async (ctx, next) => {
+  console.log('📩 Update received:', ctx.update.update_id, ctx.message?.text || ctx.update);
+  await next();
+});
+
 bot.command('start', async (ctx) => {
+  console.log('🚀 /start command from:', ctx.from?.username || ctx.from?.id);
   await ctx.reply(
     '👋 Привет, Ева! Просто отправь мне ссылку на видео!\n\n' +
       '📹 Поддерживаемые платформы:\n' +
@@ -28,8 +35,11 @@ bot.command('help', async (ctx) => {
   );
 });
 
-bot.on('message:text', async (ctx) => {
-  await handleVideoRequest(ctx);
+bot.on('message:text', (ctx) => {
+  // Запускаем обработку в фоне, чтобы не блокировать другие сообщения
+  handleVideoRequest(ctx).catch((err) => {
+    console.error('Unhandled error in handleVideoRequest:', err);
+  });
 });
 
 async function handleVideoRequest(ctx: Context): Promise<void> {
@@ -42,8 +52,7 @@ async function handleVideoRequest(ctx: Context): Promise<void> {
   const urls = extractUrls(text);
 
   if (urls.length === 0) {
-    await ctx.reply('❌ Не нашёл ссылку в сообщении. Отправь ссылку на YouTube или Instagram видео.');
-    return;
+    return; // Просто игнорируем сообщения без ссылок
   }
 
   const url = urls[0];
@@ -59,12 +68,14 @@ async function handleVideoRequest(ctx: Context): Promise<void> {
     return;
   }
 
+  console.log('📥 Starting download:', parsed.url);
   const statusMessage = await ctx.reply('⏳ Скачиваю видео...');
 
   try {
     await ensureDir(config.tempDir);
 
     const downloadResult = await downloadVideo(parsed.url);
+    console.log('📥 Download result:', downloadResult.success, downloadResult.error || '');
 
     if (!downloadResult.success || !downloadResult.filePath) {
       await ctx.api.editMessageText(
@@ -82,6 +93,7 @@ async function handleVideoRequest(ctx: Context): Promise<void> {
     );
 
     const compressionResult = await compressIfNeeded(downloadResult.filePath);
+    console.log('🗜️ Compression result:', compressionResult.success);
 
     if (!compressionResult.success || !compressionResult.filePath) {
       await ctx.api.editMessageText(
@@ -102,6 +114,7 @@ async function handleVideoRequest(ctx: Context): Promise<void> {
     await ctx.replyWithVideo(new InputFile(compressionResult.filePath));
 
     await ctx.api.deleteMessage(ctx.chat!.id, statusMessage.message_id);
+    console.log('✅ Video sent successfully');
 
     // Очистка временных файлов
     await deleteFile(downloadResult.filePath);
@@ -109,12 +122,16 @@ async function handleVideoRequest(ctx: Context): Promise<void> {
       await deleteFile(compressionResult.filePath);
     }
   } catch (error) {
-    console.error('Error processing video:', error);
-    await ctx.api.editMessageText(
-      ctx.chat!.id,
-      statusMessage.message_id,
-      '❌ Произошла ошибка при обработке видео. Попробуй ещё раз.'
-    );
+    console.error('❌ Error processing video:', error);
+    try {
+      await ctx.api.editMessageText(
+        ctx.chat!.id,
+        statusMessage.message_id,
+        '❌ Произошла ошибка при обработке видео. Попробуй ещё раз.'
+      );
+    } catch {
+      // Игнорируем ошибку редактирования
+    }
   }
 }
 
