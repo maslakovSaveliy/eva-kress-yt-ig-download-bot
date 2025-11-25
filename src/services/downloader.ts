@@ -11,6 +11,12 @@ interface DownloadResult {
   error?: string;
 }
 
+const COOKIES_PATH = './cookies.txt';
+
+function isInstagramUrl(url: string): boolean {
+  return url.includes('instagram.com');
+}
+
 export async function downloadVideo(url: string): Promise<DownloadResult> {
   await ensureDir(config.tempDir);
 
@@ -28,7 +34,17 @@ export async function downloadVideo(url: string): Promise<DownloadResult> {
       '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
       '--no-warnings',
       '--quiet',
+      '--socket-timeout', '30',
+      '--retries', '3',
     ];
+
+    // Добавляем cookies для Instagram если файл существует
+    if (isInstagramUrl(url) && existsSync(COOKIES_PATH)) {
+      args.push('--cookies', COOKIES_PATH);
+    }
+
+    // User-Agent для обхода блокировок
+    args.push('--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
     const process = spawn('yt-dlp', args);
 
