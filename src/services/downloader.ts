@@ -33,11 +33,8 @@ export async function downloadVideo(url: string): Promise<DownloadResult> {
       // Скачиваем лучшее видео до 1080p с H.264 кодеком + лучшее аудио
       '-f', 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
       '--merge-output-format', 'mp4',
-      // Перекодируем видео в H.264 если нужно (для совместимости с Telegram)
-      '--recode-video', 'mp4',
-      '--postprocessor-args', 'ffmpeg:-c:v libx264 -c:a aac -movflags +faststart',
       '--no-warnings',
-      '--socket-timeout', '30',
+      '--socket-timeout', '60',
       '--retries', '3',
     ];
 
