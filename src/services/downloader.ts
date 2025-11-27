@@ -29,24 +29,36 @@ async function downloadViaYtDlp(url: string): Promise<DownloadResult> {
   );
 
   return new Promise((resolve) => {
+    const isInsta = isInstagramUrl(url);
+    
     const args = [
       url,
       '-o', outputTemplate,
       '--no-playlist',
-      '-f', 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
-      '--merge-output-format', 'mp4',
       '--no-warnings',
       '--socket-timeout', '60',
       '--retries', '5',
     ];
 
-    // Cookies для Instagram
+    if (isInsta) {
+      // Для Instagram: скачиваем лучшее качество и перекодируем
+      args.push('-f', 'best');
+      args.push('--recode-video', 'mp4');
+      args.push('--postprocessor-args', 'ffmpeg:-c:v libx264 -c:a aac -movflags +faststart -preset fast');
+      console.log('📸 Instagram: will recode to H.264');
+    } else {
+      // Для YouTube и других
+      args.push('-f', 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best');
+      args.push('--merge-output-format', 'mp4');
+    }
+
+    // Cookies
     if (existsSync(COOKIES_PATH)) {
       args.push('--cookies', COOKIES_PATH);
     }
 
-    // Прокси для Instagram (из .env)
-    if (isInstagramUrl(url) && config.proxy) {
+    // Прокси для Instagram
+    if (isInsta && config.proxy) {
       args.push('--proxy', config.proxy);
       console.log('🌐 Using proxy for Instagram');
     }
