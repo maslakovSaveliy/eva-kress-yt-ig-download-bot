@@ -4,6 +4,7 @@ interface Config {
   botToken: string;
   tempDir: string;
   maxFileSizeMB: number;
+  proxy: string | null;
 }
 
 const botToken = process.env.BOT_TOKEN;
@@ -16,5 +17,6 @@ export const config: Config = {
   botToken,
   tempDir: './temp',
   maxFileSizeMB: 50,
+  proxy: process.env.PROXY || null,
 };
 
