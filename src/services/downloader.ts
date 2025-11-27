@@ -30,16 +30,19 @@ export async function downloadVideo(url: string): Promise<DownloadResult> {
       url,
       '-o', outputTemplate,
       '--no-playlist',
+      // Скачиваем лучшее видео до 1080p с H.264 кодеком + лучшее аудио
+      '-f', 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
       '--merge-output-format', 'mp4',
-      '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+      // Перекодируем видео в H.264 если нужно (для совместимости с Telegram)
+      '--recode-video', 'mp4',
+      '--postprocessor-args', 'ffmpeg:-c:v libx264 -c:a aac -movflags +faststart',
       '--no-warnings',
-      '--quiet',
       '--socket-timeout', '30',
       '--retries', '3',
     ];
 
-    // Добавляем cookies для Instagram если файл существует
-    if (isInstagramUrl(url) && existsSync(COOKIES_PATH)) {
+    // Добавляем cookies если файл существует
+    if (existsSync(COOKIES_PATH)) {
       args.push('--cookies', COOKIES_PATH);
     }
 
