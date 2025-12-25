@@ -3,7 +3,7 @@ import { config } from './config.js';
 import { parseVideoUrl, extractUrls } from './utils/url-parser.js';
 import { downloadVideo } from './services/downloader.js';
 import { compressIfNeeded } from './services/compressor.js';
-import { deleteFile, ensureDir } from './utils/file.js';
+import { deleteFile, ensureDir, cleanupTempDir } from './utils/file.js';
 
 export const bot = new Bot(config.botToken);
 
@@ -78,10 +78,27 @@ async function handleVideoRequest(ctx: Context): Promise<void> {
     console.log('📥 Download result:', downloadResult.success, downloadResult.error || '');
 
     if (!downloadResult.success || !downloadResult.filePath) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/b9572309-fd2d-429b-87b0-15b0e9c67957',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'bot.ts:80',message:'Download failed - error details',data:{url:parsed.url,errorLength:downloadResult.error?.length,errorPreview:downloadResult.error?.substring(0,200),hasNoVideoFormats:downloadResult.error?.includes('No video formats found')},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,B,C'})}).catch(()=>{});
+      // #endregion
+      
+      // Обрезаем длинные сообщения об ошибках (лимит Telegram 4096 символов)
+      const errorMsg = downloadResult.error || 'Неизвестная ошибка';
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/b9572309-fd2d-429b-87b0-15b0e9c67957',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'bot.ts:86',message:'Error message length check',data:{originalLength:errorMsg.length,willTruncate:errorMsg.length>200},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
+      
+      const shortError = errorMsg.length > 200 ? errorMsg.substring(0, 200) + '...' : errorMsg;
+      const fullMessage = `❌ Не удалось скачать видео: ${shortError}`;
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/b9572309-fd2d-429b-87b0-15b0e9c67957',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'bot.ts:92',message:'Final message to send',data:{messageLength:fullMessage.length,maxAllowed:4096},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
+      
       await ctx.api.editMessageText(
         ctx.chat!.id,
         statusMessage.message_id,
-        `❌ Не удалось скачать видео: ${downloadResult.error || 'Неизвестная ошибка'}`
+        fullMessage
       );
       return;
     }
@@ -132,6 +149,10 @@ async function handleVideoRequest(ctx: Context): Promise<void> {
     } catch {
       // Игнорируем ошибку редактирования
     }
+  } finally {
+    // Гарантированная очистка temp папки после каждого запроса
+    await cleanupTempDir(config.tempDir);
+    console.log('🧹 Temp folder cleaned');
   }
 }
 
